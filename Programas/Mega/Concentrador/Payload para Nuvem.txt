@@ -1,0 +1,615 @@
+//*********************************************************************************************************************
+// Nome da Rotina: MontaMsgRspCoAP                                                                                    *
+//                                                                                                                    *
+// Funcao: monta e transmite a mensagem de resposta com os estados da UTR em Protocolo CoAP em UDP                    *
+//                                                                                                                    *
+// Entrada: codigo do comando que esta mensagem foi usada como resposta                                               *
+// Saida: nao tem                                                                                                     *
+// Byte |           0         |        1        |   2  |   3  |    4     |      5     |                               *
+// Bit  | 7 6 | 5 4 | 3 2 1 0 | 7 6 5 4 3 2 1 0 |      |      |          |            |                               *
+//      | Ver |Tipo |  Token  |  Código (c.m)   | Message ID  |  Option  | Payload ID |                               *
+//                                                                                                                    *
+// Ver (Versão) = 01 (O número da versão do protocolo CoAP é fixo)  / TKL (Token) = 0000 (não é usado)                *                            *
+// Tipo: 00 Confirmável (CON) / 01 Não-Confirmável (NON) / 10 Reconhecimento (ACK) / 11 Reset (RST)                   *
+//                                                                                                                    *            *
+// Códigos de Solicitação: 00 EMPTY / 01 GET   / 02 POST / 03 PUT / 04 DELETE                                         * 
+//                                                                                                                    *            *
+// Cód. Resposta: 41 Created / 42 Deleted / 43 Valid / 44 Changed / 45 Content                                        *
+//                                                                                                                    *
+// Cód. Erro Cliente: 80 Bad Request / 81 Unauthorized / 82 Bad Option / 83 Forbidden                                 *
+// 84 Not Found / 85 Method Not Allowed / 86 Not Acceptable / 8C Request Entity Incomplete                            *
+//                                                                                                                    *
+// Cód. Erro Servidor: A0 Internal Server Error / A1 Not Implemented / A2 Bad Gateway                                 *
+//                     A3 Service Unavailable / A4 Gateway Timeout / A5 Proxying Not Supported                        *
+//                                                                                                                    *
+// Message ID (Identificação da mensagem): inteiro de 16 bits sem sinal                                               *
+//                                                                                                                    *
+// Option (Opções) = 0000 0000 (não é usado) / Identificador de Início do Payload: 1111 1111                          *
+//                                                                                                                    *
+//*********************************************************************************************************************
+//
+void MontaMsgRspCoAP(byte Codigo) {
+
+  // Cabecalho CoAP: bytes 000 a 015
+  TxBufEst[0] = 0x60;              // Versao = 1 (01) e Tipo = 2 (10) ACK 
+  TxBufEst[1] = 0x45;              // Codigo de Resposta 2.05 (Resposta OK do tipo Content)
+  TxBufEst[2] = ByteH(MsgCoAPId);  // Responde com o Identificador da Mensagem Recebido
+  TxBufEst[3] = ByteL(MsgCoAPId);
+  TxBufEst[4] = 0x0c1;             // Primeiro Campo de Opcoes => Delta = 12: Content-format 
+  TxBufEst[5] = 0x2a;              // Opcao do Tipo do Payload: application/octet-stream
+  TxBufEst[6] = 0x0ff;             // Indicador do fim do Campo de Opcoes
+  TxBufEst[7] = 0;
+  TxBufEst[8] = 0;
+  TxBufEst[9] = 0;
+  TxBufEst[10] = 0;
+  TxBufEst[11] = 0;
+  TxBufEst[12] = 0;
+  TxBufEst[13] = 0;
+  TxBufEst[14] = 0;
+  TxBufEst[15] = 0;
+  
+  // Cabecalho do Payload: bytes 016 a 031
+  TxBufEst[16] = Codigo;            // O comando foi recebido e executado (codigo do comando)
+  TxBufEst[17] = 3;                 // Modelo da UTR (3 = Arduino Mega 2560)
+  TxBufEst[18] = AcertaRelogio;     // Modo (AcertaRelogio=0 ou AcertaRelogio=1)
+  TxBufEst[19] = 81;                // Numero de Estados Digitais Configurados (max 112)
+  TxBufEst[20] = 48;                // Numero de Medidas Configuradas (max 48)
+  TxBufEst[21] = HoraRec;           // Hora recebida da UTR Arduino Mega
+  TxBufEst[22] = MinutoRec;         // Minuto recebido da UTR Arduino Mega
+  TxBufEst[23] = SegundoRec;        // Segundo recebido da UTR Arduino Mega
+  TxBufEst[24] = DiaRec;            // Dia recebido da UTR Arduino Mega
+  TxBufEst[25] = MesRec;            // Mês recebido da UTR Arduino Mega
+  TxBufEst[26] = AnoRec;            // Ano recebido da UTR Arduino Mega (00 a 99)
+  TxBufEst[27] = EstComIED1;        // Estado de Comunicacao da UTR Arduino Mega
+  TxBufEst[28] = VerCRCRec[0];      // Estado de Comunicacao do Controlador de Carga 1
+  TxBufEst[29] = VerCRCRec[1];      // Estado de Comunicacao do Controlador de Carga 2
+  TxBufEst[30] = 0;
+  TxBufEst[31] = 0;
+  
+  // Estados Digitais de Entradas ou Variaveis (80): bytes 032 a 111 - 1 byte por estado
+  TxBufEst[32] = ChLR;
+  TxBufEst[33] = ChEN;
+  TxBufEst[34] = ChMA;
+  TxBufEst[35] = ChPrB;
+  TxBufEst[36] = ChPrC;
+  
+  TxBufEst[37] = DJEINV1;
+  TxBufEst[38] = CircuitoBoia;
+  TxBufEst[39] = BoiaCxAzul;
+  TxBufEst[40] = CircuitoBomba;
+  TxBufEst[41] = AlimRedeBomba;
+  TxBufEst[42] = EstadoRede;
+  TxBufEst[43] = ModoOperacao;
+  TxBufEst[44] = ModoComando;
+  TxBufEst[45] = ModoControle;
+  TxBufEst[46] = Carga1;
+  TxBufEst[47] = Carga2;
+  TxBufEst[48] = Carga3;
+  TxBufEst[49] = Carga4;
+  TxBufEst[50] = HabCom;
+  TxBufEst[51] = EstadoInversor1;
+  TxBufEst[52] = EstadoInversor2;
+  TxBufEst[53] = EstadoCarga3;
+  TxBufEst[54] = BombaLigada;
+  TxBufEst[55] = ModoControle1;
+  TxBufEst[56] = FalhaInversor1;
+  TxBufEst[57] = SubTensaoInv1;
+  TxBufEst[58] = SobreTensaoInv1;
+  TxBufEst[59] = SobreTempDrInv1;
+  TxBufEst[60] = SobreTempTrInv1;
+  TxBufEst[61] = DisjAbertoIv1;
+  TxBufEst[62] = FalhaInversor2;
+  TxBufEst[63] = SubTensaoInv2;
+  TxBufEst[64] = SobreTensaoInv2;
+  TxBufEst[65] = SobreTempDrInv2;
+  TxBufEst[66] = SobreTempTrInv2;
+  TxBufEst[67] = DisjAbertoIv2;
+  TxBufEst[68] = CDBat;
+  TxBufEst[69] = CxAzNivBaixo;
+  TxBufEst[70] = EdCxAzCheia;
+  TxBufEst[71] = FonteCC2Lig;
+  TxBufEst[72] = EstadoCxAz;
+  TxBufEst[73] = FonteCC1Lig;
+  TxBufEst[74] = SobreCorrenteInv1;
+  TxBufEst[75] = SobreCorrenteInv2;
+
+  // Estado das Saidas Digitais (48) 112 a 159
+  TxBufEst[112] = SD00;
+  TxBufEst[113] = SD01;
+  TxBufEst[114] = SD02;
+  TxBufEst[115] = SD03;
+  TxBufEst[116] = SD04;
+  TxBufEst[117] = SD05;
+  TxBufEst[118] = SD06;
+  TxBufEst[119] = SD07;
+  TxBufEst[120] = SD08;
+  TxBufEst[121] = SD09;
+  TxBufEst[122] = SD10;
+  TxBufEst[123] = SD11;
+  TxBufEst[124] = SD12;
+  TxBufEst[125] = SD13;
+  TxBufEst[126] = SD14;
+  TxBufEst[127] = SD15;
+  TxBufEst[128] = SD16;
+  TxBufEst[129] = SD17;
+  TxBufEst[130] = SD18;
+  TxBufEst[131] = SD19;
+           
+  // Medidas de 16 bits (64): bytes 160 a 288 - 2 bytes por medida
+  CMedTxBuf(VBat,160);         // Med[00] - VBat = Tensao do Barramento Principal 24Vcc
+  CMedTxBuf(0,162);            // Med[01] - Reserva
+  CMedTxBuf(TDInv1,164);       // Med[02] - Temperatura do Driver do Inversor 1
+  CMedTxBuf(ICircCC,166);      // Med[03] - Corrente CC: Circuitos de Corrente Continua
+  CMedTxBuf(VSIv1,168);        // Med[04] - Tensao CA: Saida do Inversor 1
+  CMedTxBuf(VRede,170);        // Med[05] - Tensao CA: Rede
+  CMedTxBuf(VSIv2,172);        // Med[06] - Tensao CA: Saida do Inversor 1
+  CMedTxBuf(TTInv1,174);       // Med[07] - Temperatura do Transformador do Inversor 1
+  CMedTxBuf(TDInv2,176);       // Med[08] - Temperatura do Driver do Inversor 2
+  CMedTxBuf(TTInv2,178);       // Med{09] - Temperatura do Transformador do Inversor 2
+  CMedTxBuf(ISInv2,180);       // Med[10] - Corrente CA: Saida do Inversor 2
+  CMedTxBuf(IFonteCgBat,182);  // Med[11] - Corrente CC: Saida da Fonte 24Vcc
+  CMedTxBuf(IEIv2,184);        // Med[12] - Corrente CC: Entrada do Inversor 2
+  CMedTxBuf(ISInv1,186);       // Med[13] - Corrente CA: Saida do Inversor 1
+  CMedTxBuf(Icarga3,188);      // Med[14] - Corrente CA:Carga 3
+  CMedTxBuf(IEIv1,190);        // Med[15] - Corrente CC: Entrada do Inversor 1
+  CMedTxBuf(EAME0,192);        // Med[16] - Media Estendida da Entrada Analogica 0 (Tensao 24Vcc Geral)
+  CMedTxBuf(TmpBombaLig,194);  // Med[17] - Temporizador de Bomba Ligada em segundos
+  CMedTxBuf(VP12,196);         // Med[18] - Controlador de Carga 1 - MODBUS=0x3100 - PV array voltage 1
+  CMedTxBuf(IS12,198);         // Med[19] - Controlador de Carga 1 - MODBUS=0x3101 - PV array current 1
+  CMedTxBuf(WS12,200);         // Med[20] - Controlador de Carga 1 - MODBUS=0x3102 - PV array power 1
+  CMedTxBuf(VBat1,202);        // Med[21] - Controlador de Carga 1 - MODBUS=0x3104 - Battery voltage 1
+  CMedTxBuf(ISCC1,204);        // Med[22] - Controlador de Carga 1 - MODBUS=0x3105 - Battery charging current 1
+  CMedTxBuf(WSCC1,206);        // Med[23] - Controlador de Carga 1 - MODBUS=0x3106 - Battery charging power 1
+  CMedTxBuf(TBat1,208);        // Med[24] - Controlador de Carga 1 - MODBUS=0x3110 - Battery Temperature 1
+  CMedTxBuf(0, 210);           // Med[25] - Reserva
+  CMedTxBuf(VP34,212);         // Med[26] - Controlador de Carga 2 - MODBUS=0x3100 - PV array voltage 2
+  CMedTxBuf(IS34,214);         // Med[27] - Controlador de Carga 2 - MODBUS=0x3101 - PV array current 2
+  CMedTxBuf(WS34,216);         // Med[28] - Controlador de Carga 2 - MODBUS=0x3102 - PV array power 2
+  CMedTxBuf(VBat2,218);        // Med[29] - Controlador de Carga 2 - MODBUS=0x3104 - Battery voltage 2
+  CMedTxBuf(ISCC2,220);        // Med[30] - Controlador de Carga 2 - MODBUS=0x3105 - Battery charging current 2
+  CMedTxBuf(WSCC2, 222);       // Med[31] - Controlador de Carga 2 - MODBUS=0x3106 - Battery charging power 2
+  CMedTxBuf(TBat2,224);        // Med[32] - Controlador de Carga 2 - End. MODBUS=0x3110 - Battery Temperature 2
+  CMedTxBuf(ITotGer,226);      // Med[33] - Corrente Total Gerada
+  CMedTxBuf(WTotGer,228);      // Med[34] - Potencia Total Gerada
+  CMedTxBuf(WCircCC,230);      // Med[35] - Potencia Consumida pelos Circuitos de 24Vcc
+  CMedTxBuf(WFonteCC,232);     // Med[36] - Potencia Fornecida pela Fonte 24Vcc
+  CMedTxBuf(IBat,234);         // Med[37] - Corrente de Carga ou Descarga do Banco de Baterias
+  CMedTxBuf(WEIv2,236);        // Med[38] - Potencia de Entrada do Inversor 2
+  CMedTxBuf(WSInv2,238);       // Med[39] - Potencia de Saida do Inversor 2
+  CMedTxBuf(WEIv1,240);        // Med[41] - Potencia de Entrada do Inversor 1
+  CMedTxBuf(WSInv1,242);       // Med[42] - Potencia de Saida do Inversor 1
+  CMedTxBuf(ITotCg,244);       // Med[44] - Corrente Total Consumida pelas Cargas
+  CMedTxBuf(WTotCg,246);       // Med[45] - Potencia Total Consumida pelas Cargas
+  CMedTxBuf(TmpCxAzNvBx,248);  // Med[46] - Tempo da Caixa Azul em Nivel Baixo
+  CMedTxBuf(IFontesCC12,250);  // Med[47] - IFontesCC12
+  
+  // Calcula o CRC16 e carrega nos ultimos dois bytes da mensagem
+  unsigned int CRC = 0xffff;
+  byte lsb;
+  for (int j = 0; j < (TamMsgTxCoAP - 2); j++) {
+    CRC = CRC ^ MsgTx[j];
+    for (int i = 0; i < 8; i++) {
+      lsb = CRC & 0x0001;
+      if (lsb == 0){
+        CRC = CRC / 2;
+      }
+      if (lsb == 1) {
+        CRC = CRC / 2;
+        CRC = CRC^0xA001;
+      }
+    }
+  }
+  TxBufEst[TamMsgTxCoAP - 2] = ByteL(CRC);
+  TxBufEst[TamMsgTxCoAP - 1] = ByteH(CRC);
+  
+  // Transmite a mensagem para o cliente
+  Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+  Udp.write(TxBufEst, TamMsgTxCoAP);
+  Udp.endPacket();
+  
+} // Fim da Rotina
+
+
+//********************************************************************************************************
+// Nome da Rotina: Carrega_TxBufEst                                                                      *
+//                                                                                                       *
+// Funcao: carrega um valor double em 3 bytes no buffer BufTxEst no formato (Low, Mid, High)             *
+//                                                                                                       *
+// Entrada: valor double a ser carregado, endereco inicial de carga no buffer TxBufEst                   *
+// Saida: nao tem                                                                                        *
+//                                                                                                       *
+//********************************************************************************************************
+//
+void Carrega_TxBufEst(double valor, int EndIni) {
+
+  TxBufEst[EndIni] = ByteLow(valor);
+  TxBufEst[EndIni + 1] = ByteMid(valor);
+  TxBufEst[EndIni + 2] = ByteHigh(valor);
+
+}
+
+
+//********************************************************************************************************
+// Nome da Rotina: CMedTxBuf                                                                             *
+//                                                                                                       *
+// Funcao: carrega um valor double em 2 bytes no buffer BufTxEst no formato (Low, High)                  *
+//                                                                                                       *
+// Entrada: valor double a ser carregado, endereco inicial de carga no buffer TxBufEst                   *
+// Saida: nao tem                                                                                        *
+//                                                                                                       *
+//********************************************************************************************************
+//
+void CMedTxBuf(double valor, int EndIni) {
+
+  TxBufEst[EndIni] = ByteL(valor);
+  TxBufEst[EndIni + 1] = ByteH(valor);
+
+}
+
+
+//********************************************************************************************************************
+// Nome da Rotina: EfetuaCalculos()                                                                                  *
+//                                                                                                                   *
+// Funcao: calcula as variaveis                                                                                      *
+//                                                                                                                   *
+// Entrada: nao tem                                                                                                  *
+// Saida: nao tem                                                                                                    *
+//                                                                                                                   *
+//********************************************************************************************************************
+//
+void EfetuaCalculos() {
+
+  ITotGer = ISCC1 + ISCC2;               // Corrente Total Gerada
+  WTotGer = WSCC1 + WSCC2;               // Potência Total Gerada
+  ITotCg = IEIv2 + IEIv1 + (ICircCC/10); // Corrente Total Consumida pelas Cargas
+  WCircCC = (VBat * ICircCC)/1000;       // Potencia Consumida pelo Circuito CC
+  WTotCg = VBat * ITotCg;                // Potencia Total Consumida pelas Cargas
+  WFonteCC = (VBat * IFonteCgBat) / 100; // Potencia de Carga das Baterias Fornecida pela Fonte CC1
+  IBat = 0;
+  
+  // Inversor 2
+  WEIv2 = (VBat * IEIv2)/100;            // Potência de Entrada do Inversor 2
+  WSInv2 = (VSIv2 * ISInv2)/1000;        // Potência de Saída do Inversor 2
+  
+  WEIv1 = (VBat * IEIv1)/100;            // Potência de Entrada do Inversor 1
+  WSInv1 = (VSIv1 * ISInv1)/1000;        // Potência de Saída do Inversor 1
+  
+  // Cargas
+  ITotCg = (ICircCC/10) + IEIv2 + IEIv1;  // Calcula a Corrente Total Consumida pelas Cargas
+  WTotCg = WCircCC + WEIv2 + WEIv1;       // Calcula a Potência Total Consumida pelas Cargas
+  
+}
+
+
+//********************************************************************************************************
+// Nome da Rotina: ComunicacaoIEDs()                                                                     *
+//                                                                                                       *
+// Funcao: efetua a comunicacao com os Controladores de Carga 1 e 2 por Interface Serial                 *
+//                                                                                                       *
+// Entrada: numero da interface serial (0 = A ou 1 = B)                                                  *
+// Saida: nao tem                                                                                        *
+//                                                                                                       *
+//********************************************************************************************************
+//
+void ComunicacaoIEDs() {
+
+  byte Ret = 3;
+  VerCRCRec[0] = 0;
+  while ((VerCRCRec[0] == 0) && (Ret > 0)) { 
+    TransmiteRecebeMsg(0);
+    Serial.print("VerCRC[0] = ");
+    Serial.println(VerCRCRec[0]);
+    Ret = Ret - 1;
+  }
+
+  Ret = 3;
+  VerCRCRec[1] = 0;
+  while ((VerCRCRec[1] == 0) && (Ret > 0)) { 
+    TransmiteRecebeMsg(1);
+    Serial.print("VerCRC[1] = ");
+    Serial.println(VerCRCRec[1]);
+    Ret = Ret - 1;
+  }
+  
+} // Fim da Rotina ComunicacaoIEDs()
+
+
+//********************************************************************************************************
+// Nome da Rotina: TransmiteRecebeMsg()                                                                  *
+//                                                                                                       *
+// Funcao: monta e transmite a mensagem de chamada em protocolo MODBUS RTU para a Serial2                *
+//         para leitura dos Controladores de Carga 1 e 2                                                 *
+//                                                                                                       *
+// Entrada: numero da interface serial (0 = A ou 1 = B)                                                  *
+// Saida: nao tem                                                                                        *
+//                                                                                                       *
+//********************************************************************************************************
+//
+void TransmiteRecebeMsg(byte serial) {
+
+  byte Endereco = 1;
+  byte Funcao = 4;
+  unsigned int RegIni = 0x3100;
+  unsigned int NumReg = 17;
+  byte NBMsgR = 5 + (NumReg * 2);
+  unsigned int cont = 0;
+  unsigned int CRC = 0xffff;
+  byte lsb;
+    
+  // Carrega na mensagem a ser enviada as informacoes                               
+  MsgTx[0] = Endereco;
+  MsgTx[1] = Funcao;
+  MsgTx[2] = ByteH(RegIni);
+  MsgTx[3] = ByteL(RegIni);
+  MsgTx[4] = ByteH(NumReg);
+  MsgTx[5] = ByteL(NumReg);
+
+  // Calcula o CRC16 e carrega nos ultimos dois bytes da mensagem
+  for (int j = 0; j < 6; j++) {
+    CRC = CRC ^ MsgTx[j];
+    for (int i = 0; i < 8; i++) {
+      lsb = CRC & 0x0001;
+      if (lsb == 0){
+        CRC = CRC / 2;
+      }
+      if (lsb == 1) {
+        CRC = CRC / 2;
+        CRC = CRC^0xA001;
+      }
+    }
+  }
+     
+  MsgTx[6] = ByteL(CRC);
+  MsgTx[7] = ByteH(CRC);
+  
+  if (serial == 0) {           // Se a comunicacao com o CC1 esta habilitada,
+    digitalWrite(RE1, HIGH);   // desabilita a recepcao do RS485 do CC1
+    digitalWrite(DE1, HIGH);   // habilita a transmissao para o RS485 do CC1
+  }
+
+  if (serial == 1) {           // Se a comunicacao com o CC2 esta habilitada,
+    digitalWrite(RE2, HIGH);   // desabilita a recepcao do RS485 do CC2  
+    digitalWrite(DE2, HIGH);   // e habilita a transmissao para o RS485 do CC2
+  }
+  
+  // Transmite a Mensagem de Chamada pela Serial2
+  delay(10);
+  for (int i = 0; i < 8; i++) {
+    Serial2.write(MsgTx[i]);    // Envia o byte para o buffer de transmissao
+    delayMicroseconds(EsperaByte);
+  }
+
+  delay(20);
+  
+  if (serial == 0) {           // Se a comunicacao com o CC1 esta habilitada,
+    digitalWrite(DE1, LOW);    // Desabilita a transmissao para o RS485 do CC1,
+    digitalWrite(RE1, LOW);    // e habilita a recepcao do RS485 do CC1
+  }
+
+  if (serial == 1) {           // Se a comunicacao com o CC2 esta habilitada,
+    digitalWrite(DE2, LOW);    // Desabilita a transmissao para o RS485 do CC2,
+    digitalWrite(RE2, LOW);    // e habilita a recepcao do RS485 do CC1
+  }
+
+  delay(20);
+
+  // Inicia as variaveis de indicacao de mensagem OK e timeout
+  cont = 0;
+  CRC = 0xffff;
+  TmoIED[serial] = 0;
+
+  // Le os bytes recebidos pela Interface Serial2
+  int cntb = 0;
+  while ((cntb < NBMsgR) && (cont < 10000)) {
+    if (Serial2.available() > 0) {
+      MsgRx[cntb] = Serial2.read();
+      cntb = cntb + 1;
+      delayMicroseconds(EsperaByte);
+      //delay(1);
+    }
+    cont = cont + 1;
+  }
+     
+  if (serial == 0) {                          // Se esta selecionada a comunicacao com o CC1,
+    digitalWrite(RE1, HIGH);                  // desabilita a recepcao do RS485 do CC1
+  }
+  else {                                      // Se esta selecionada a comunicacao com o CC2,
+    digitalWrite(RE2, HIGH);                  // desabilita a recepcao do RS485 do CC2
+  }
+
+  if (cont >= 10000) {                         // Se ocorreu timeout na mensagem recebida,
+    TmoIED[serial] = 1;                        // aciona o indicador de timeout
+  }
+  else {                                      // Se nao ocorreu timeout,
+    for (int j = 0; j < (NBMsgR - 2); j++) {  // Calcula o CRC da mensagem recebida,
+      CRC = CRC ^ MsgRx[j];
+      for (int i = 0; i < 8; i++) {
+        lsb = CRC & 0x0001;
+        if (lsb == 0){
+          CRC = CRC / 2;
+        }
+        if (lsb == 1) {
+          CRC = CRC / 2;
+          CRC = CRC^0xA001;
+        }
+      }
+    }
+    
+    // Verifica se a mensagem chegou corretamente
+    if ((MsgRx[NBMsgR - 2] == ByteL(CRC)) && (MsgRx[NBMsgR - 1] == ByteH(CRC))) {   // Se chegou,
+      VerCRCRec[serial] = 1;                                      // aciona o indicador de mensagem OK
+      byte d = 0;
+
+      // Converte os Registros do Buffer de Recepcao do Controlador de Carga 1 e carrega no Array de Medidas
+      if (serial == 0) {
+        for (int i = 0; i < NumReg; i++) {
+          Med1[i] = (256 * MsgRx[(2 * i) + 3]) + MsgRx[(2 * i) + 4];
+        }
+
+        // Carrega as medidas recebidas do Controlador de Carga 1 nas variaveis
+        VP12 = Med1[0];                    // 0x3100 - PV array voltage 1
+        IS12 = Med1[1];                    // 0x3101 - PV array current 1
+        WS12 = Med1[2] + (256 * Med1[3]);  // 0x3102 - PV array power 1
+        VBat1 = Med1[4];                   // 0x3104 - Battery voltage 1
+        ISCC1 = Med1[5];                   // 0x3105 - Battery charging current 1
+        WSCC1 = Med1[6] + (256 * Med1[7]); // 0x3106 - Battery charging power 1
+        TBat1 =  Med1[16];                 // 0x3110 - Battery Temperature 1
+      }
+      else {  // Converte os Registros do Buffer de Recepcao do Controlador de Carga 1 e carrega no Array de Medidas
+        for (int i = 0; i < NumReg; i++) {
+          Med2[i] = (256 * MsgRx[(2 * i) + 3]) + MsgRx[(2 * i) + 4];
+        }
+
+        // Carrega as medidas recebidas do Controlador de Carga 2 nas variaveis
+        VP34 = Med2[0];                    // 0x3100 - PV array voltage 2
+        IS34 = Med2[1];                    // 0x3101 - PV array current 2
+        WS34 = Med2[2] + (256 * Med2[3]);  // 0x3102 - PV array power 2
+        VBat2 = Med2[4];                   // 0x3104 - Battery voltage 2
+        ISCC2 = Med2[5];                   // 0x3105 - Battery charging current 2
+        WSCC2 = Med2[6] + (256 * Med2[7]); // 0x3106 - Battery charging power 2
+        TBat2 =  Med1[16];                 // 0x3110 - Battery Temperature 1
+      }
+    }
+  }
+
+  byte Ch;
+  while (Serial2.available() > 0) {
+    Ch = Serial2.read();
+  }
+
+} // Fim da Rotina TransmiteRecebeMsg()
+
+
+//*********************************************************************************************************************
+// Nome da Rotina: ByteH                                                                                              *
+//                                                                                                                    *
+// Funcao: obtem o byte mais significativo de um inteiro de dois bytes                                                *
+//                                                                                                                    *
+// Entrada: valor double                                                                                              *
+// Saida: byte mais significativo                                                                                     *
+//                                                                                                                    *
+//*********************************************************************************************************************
+//
+byte ByteH(double valor) {
+  byte BH = (valor / 256);
+  return(BH);
+}
+
+
+//*********************************************************************************************************************
+// Nome da Rotina: ByteL                                                                                              *
+//                                                                                                                    *
+// Funcao: obtem o byte menor significativo de um inteiro de dois bytes                                               *
+//                                                                                                                    *
+// Entrada: valor double                                                                                              *
+// Saida: byte mais significativo                                                                                     *
+//                                                                                                                    *
+//*********************************************************************************************************************
+//
+byte ByteL(double valor) {
+  byte BH = (valor / 256);
+  byte BL = valor - (256 * BH);
+  return(BL);
+}
+
+
+//*********************************************************************************************************************
+// Nome da Rotina: ByteHigh                                                                                           *
+//                                                                                                                    *
+// Funcao: obtem o byte mais significativo de um inteiro de tres bytes                                                *
+//                                                                                                                    *
+// Entrada: valor inteiro                                                                                             *
+// Saida: byte mais significativo                                                                                     *
+//                                                                                                                    *
+//*********************************************************************************************************************
+//
+byte ByteHigh(double valor) {
+  byte BH = valor / 65536;
+  byte BM = (valor - (65536 * BH)) / 256;
+  return(BH);
+}
+
+//*********************************************************************************************************************
+// Nome da Rotina: ByteMid                                                                                            *
+//                                                                                                                    *
+// Funcao: obtem o byte do meio de um inteiro de tres bytes                                                           *
+//                                                                                                                    *
+// Entrada: valor inteiro                                                                                             *
+// Saida: byte mais significativo                                                                                     *
+//                                                                                                                    *
+//*********************************************************************************************************************
+//
+byte ByteMid(double valor) {
+  byte BH = valor / 65536;
+  byte BM = (valor - (65536 * BH)) / 256;
+  return(BM);
+}
+
+
+//*********************************************************************************************************************
+// Nome da Rotina: ByteLow                                                                                            *
+//                                                                                                                    *
+// Funcao: obtem o byte menos significativo de um inteiro de tres bytes                                               *
+//                                                                                                                    *
+// Entrada: valor inteiro                                                                                             *
+// Saida: byte menos significativo                                                                                    *
+//                                                                                                                    *
+//*********************************************************************************************************************
+//
+byte ByteLow(double valor) {
+  byte BH = valor / 65536;
+  double V1 = valor - (65536 * BH);
+  byte BM = V1 / 256;
+  byte BL = V1 - (256 * BM);
+  return(BL);
+}
+
+//*********************************************************************************************************************
+// Nome da Rotina: Centena                                                                                            *
+//                                                                                                                    *
+// Funcao: obtem a centena mais significativa de um inteiro na faixa de 0000 a 9999                                   *
+//                                                                                                                    *
+// Entrada: valor inteiro                                                                                             *
+// Saida: centena mais significativa                                                                                  *
+//                                                                                                                    *
+//*********************************************************************************************************************
+//
+byte Centena(unsigned int valor) {
+  byte CH = valor / 100;
+  return(CH);
+}
+
+//*********************************************************************************************************************
+// Nome da Rotina: Dezena                                                                                             *
+//                                                                                                                    *
+// Funcao: obtem a dezena de um inteiro na faixa de 0000 a 9999                                  *
+//                                                                                                                    *
+// Entrada: valor inteiro                                                                                             *
+// Saida: centena menos significativa                                                                                 *
+//                                                                                                                    *
+//*********************************************************************************************************************
+//
+byte Dezena(unsigned int valor) {
+  byte CH = valor / 100;
+  byte CL = valor - (100 * CH);
+  return(CL);
+}
+
+
+//*********************************************************************************************************************
+// Nome da Rotina: DoisBytesParaInt                                                                                   *
+//                                                                                                                    *
+// Funcao: converte dois bytes para um inteiro                                                                        *
+//                                                                                                                    *
+// Entrada: byte menos significativo, byte mais significativo                                                         *
+// Saida: valor inteiro                                                                                               *
+//                                                                                                                    *
+//*********************************************************************************************************************
+//
+unsigned int DoisBytesParaInt(byte BL, byte BH) {
+  int ByteL = BL;
+  int ByteH = BH;
+  if (BL < 0) { ByteL = 256 + BL; }
+  if (BH < 0) { ByteH = 256 + BH; }
+  return (ByteL + 256*ByteH);
+}
