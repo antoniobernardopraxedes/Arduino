@@ -102,7 +102,7 @@
 
 #define ChLR            41  // I Chave Local = 0 / Remoto = 1 => (primeira chave de baixo para cima)
 #define ChEN            42  // I Chave Economia = 0 / Normal = 1 => (segunda chave de baixo para cima)
-#define ChMA            43  // I Chave Manual = 0 / Automatico = 1 => (terceira chave de baixo para cima)
+#define ChOnOff         43  // I Chave OnGrid = 0 / OffGrid = 1 => (terceira chave de baixo para cima)
 #define ChPrB           44  // I Chave de Habilitacao de Cargas Posicao Baixo = 1
 #define ChPrC           45  // I Chave de Habilitacao de Cargas Posicao Cima = 1
 
@@ -291,6 +291,9 @@ byte Carga3;          // 0 = Desabilita Carga 3 / 1 = Habilita Carga 3
 byte Carga4;          // 0 = Desabilita Carga 4 / 1 = Habilita Carga 4
 byte BombaLigada;     // 0 = Bomba Desligada / 1 = Bomba Ligada
 byte HabCABmb;
+
+boolean OpOffGrid;    // Indica tipo de operação
+
 boolean LigaFonte;    // Indica que a fonte CC deve ser ligada
 
 // Variaveis de Alarme
@@ -402,7 +405,7 @@ void setup() {
   // Definir a Funcao dos Pinos de Entrada Digital
   pinMode(ChLR, INPUT);           // (ChLR) Chave Local = 0 / Remoto = 1 => (primeira chave de baixo para cima)
   pinMode(ChEN, INPUT);           // (ChEN) Chave Economia = 0 / Normal = 1 => (segunda chave de baixo para cima)
-  pinMode(ChMA, INPUT);           // (ChMA) Chave Manual = 0 / Automatico = 1 => (terceira chave de baixo para cima)
+  pinMode(ChOnOff, INPUT);        // (ChOnOff) Chave OnGrid = 0 / OffGrid = 1 => (terceira chave de baixo para cima)
   pinMode(ChPrB, INPUT);          // (ChPrB) Chave de Habilitacao de Cargas Posicao Baixo = 1
   pinMode(ChPrC, INPUT);          // (ChPrC) Chave de Habilitacao de Cargas Posicao Cima = 1
   pinMode(DJEINV1, INPUT);        // (DJEINV1) Disjuntor de Entrada 24Vcc do Inversor 1: Desligado = 0 / Ligado = 1
@@ -512,6 +515,8 @@ void setup() {
   Silencia = false;
   TmpBombaLig = 0;
   TmpCxAzNvBx = 0;
+
+  OpOffGrid = false;
   
   AcertaRelogio = 0;
 
@@ -711,7 +716,7 @@ void CalculaHorarios() {
   int Minuto;
   
   HHC1 = HorNasSol;         // Hora que habilita ligar a Carga 1
-  HDC1 = HorPorSol - 100;   // Hora que desabilita ligar a Carga 1
+  HDC1 = HorPorSol;         // Hora que desabilita ligar a Carga 1
     
   HHC2 = HorNasSol + 100;   // Hora que habilita ligar a Carga 2
   HDC2 = HorPorSol - 100;   // Hora que desabilita ligar a Carga 2
@@ -1126,6 +1131,18 @@ void ExecutaComando(byte codigo) {
       }
     break;
 
+    case 18: // Comando de Modo OnGrid 
+      if (ModoComando == 1) {
+        OpOffGrid = false;
+      } 
+    break;
+
+    case 19: // Comando de Modo OffGrid 
+      if (ModoComando == 1) {
+        OpOffGrid = true;
+      } 
+    break;
+
     } // switch (codigo)
   
 } // Fim da rotina ExecutaComando
@@ -1235,7 +1252,7 @@ void CarregaMedidas() {
 void VerificaTensaoRede() {
 
   int Hr = rtc.getHour();
-  
+
   if (VRede < VTRNFCA) {            // Se a tensao da rede cair abaixo do limite inferior,
     if (CTFCA > 0) {                // e se esta temporizando para confirmar Falta de CA,
       CTFCA = CTFCA - 1;            // decrementa contador
@@ -1243,11 +1260,6 @@ void VerificaTensaoRede() {
     else {                          // Se o contador de temporizacao chegou a zero, confirma a Falta CA
       EstadoRede = 0;               // Sinaliza Falta CA na rede,
       EvtFaltaCA = true;            // ativa o indicador de falta de CA na rede,
-
-      if ((Hr > 5) && (Hr < 18)) {
-        digitalWrite(SD16,1);       // aciona a SD16 para conectar os paineis fotovoltaicos nos controladores de carga
-      }
-      
       CTRCA = 0;                    // e zera o contador de temporizacao para verificacao de retorno de tensao da rede
     }
   }
@@ -1258,7 +1270,6 @@ void VerificaTensaoRede() {
         CTRCA = CTRCA + 1;          // incrementa o contador de temporizacao
         if (CTRCA >= TRRede) {      // Se a tensao da rede se manteve acima do limite pelo tempo especificado,
           EstadoRede = 1;           // sinaliza que a tensao da rede esta OK.
-          digitalWrite(SD16,0);     // e desativa a SD 16 para retorrnar os paineis para o inversor on grid
           CTRCA = 0;                // Zera o contador de temporizacao
           CTFCA = TFRede;           // Carrega o valor de temporizacao para detecao de falta de CA
         }
@@ -1316,15 +1327,15 @@ void VerificaCarga3() {
 //
 void VerificaChaves() {
 
-  ModoComando = digitalRead(ChLR);    // carrega o estado da chave Local = 0 / Remoto = 1
+  ModoComando = digitalRead(ChLR);     // carrega o estado da chave Local = 0 / Remoto = 1
   
   if (ModoComando == 0) {              // Se o Modo de Comando = Local ou vem do reset,
-    digitalWrite(SD03, HIGH);          // Teste: liga a saída digital SD03
     
-    ModoOperacao = digitalRead(ChEN);  // carrega o estado da chave Modo de Operacao: Normal = 1 / Economia Bateria = 0
-    //ModoControle = digitalRead(ChMA);
+    ModoOperacao = digitalRead(ChEN);  // carrega o estado da chave Modo de Operacao: Normal = 1 / Economia = 0
+    OpOffGrid = digitalRead(ChOnOff);  // carrega o estado da chave Modo OffGrid = 1 / Modo OnGrid = 0
+    
     //ModoControle1 = ModoControle;
-    
+  
     // se a chave de Habilitacao de Cargas esta para baixo, desabilita a Carga3 na falta de CA
     if ((digitalRead(ChPrB) == 1) && (digitalRead(ChPrC) == 0)) {
       ModoOperacao = 1;
@@ -1355,9 +1366,7 @@ void VerificaChaves() {
       Carga4 = 0;
     }
   }
-  else {
-    digitalWrite(SD03, LOW);          // Teste: desliga a saída digital SD03
-  }
+  
 } // Fim da Rotina VerificaChaves()
 
 
@@ -1373,6 +1382,29 @@ void VerificaChaves() {
 void VerificaModoOp() {
 
   int HrMn = 100 * (rtc.getHour()) + rtc.getMinute();
+
+  if (OpOffGrid) {                         // Se é operação Off Grid,
+    if ((HrMn > HHC1) && (HrMn < HDC1)) {  // e se o horário tem Sol,
+        digitalWrite(SD16,1);              // aciona os relés e conecta os paineis solares nos Controladores de Carga
+    }
+    else {                                 // Se o horário não tem Sol,
+      digitalWrite(SD16,0);                // desativa os relés
+    }
+  }
+  else {                                     // Se não é operação Off Grid,
+    if (EstadoRede == 0) {                   // e se há falta de CA,
+      if ((HrMn > HHC1) && (HrMn < HDC1)) {  // e se o horário tem Sol,
+        digitalWrite(SD16,1);                // aciona os relés e conecta os paineis solares nos Controladores de Carga
+      }
+      else {                                 // Se o horário não tem Sol,
+        digitalWrite(SD16,0);                // desativa os relés  
+      }
+    }
+    else {                                   // Se a tensão CA está normal,
+      digitalWrite(SD16,0);                  // desativa os relés e conecta os paineis solares no Inversor On Grid
+    }
+  }
+  
   
   if ((ModoOperacao == 0) || (EAME0 < VMinBat)) {  // Se Modo de Operacao = Economia ou Tensão 24Vcc está baixa,
     CT1_Rede();                                    // passa CT1 para a Rede (Carga 2 - Torre)
