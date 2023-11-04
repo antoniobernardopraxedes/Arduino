@@ -1,7 +1,7 @@
 //*************************************************************************************************************
 // Programa do Equipamento Unidade Terminal Remota (UTR) com Arduíno Mega usando Interface Serial             *
 //                                                                                                            *
-// Data: 22/10/2023                                                                                           *
+// Data: 03/11/2023                                                                                           *
 //                                                                                                            *
 // O programa foi modificado para operação normal usando a energia da rede e inversor off grid. Na falta da   *
 // energia da rede, o sistema entra em modo off grid, ligando o Inversor 1, alimentando a carga 2 (Torre), e  *
@@ -279,7 +279,7 @@ byte EstadoInversor1; // Inversor 1 - 1 = Ligado / 0 = Desligado
 byte EstadoInversor2; // Inversor 2 - 1 = Ligado / 0 = Desligado
 byte EstadoRede;      // Estado da Tensao da Rede
 byte Estado24Vcc;     // Estado da Tensao 24Vcc
-byte EstadoCarga3;    // Estado da Carga 3: 0 = Desligada / 1 = Ligada
+byte EstadoGeladeira;    // Estado da Carga 3: 0 = Desligada / 1 = Ligada
 byte EstadoCxAz;      // Estado da Caixa Azul: 0=Indefinido / 1=Prec Ench Niv Baixo / 2=Prec Ench Niv Norm/ 3=Cheia
 byte ModoComando;     // 0 = Controle Local / 1 = Controle Remoto
 byte ModoControle;    // 0 = Controle Manual / 1 = Controle Automatico das Cargas 2, 3 e 4
@@ -605,15 +605,15 @@ void loop() {
   
   // Verifica o Estado da Carga 3
   VerificaCarga3();
-   
-  // Verifica o Modo de Operacao e a Habilitacao das Cargas
-  VerificaModoOp();
   
   // Verifica o funcionamento do Inversor 1
-  //VerificaInversor1();
+  VerificaInversor1();
 
   // Verifica o funcionamento do Inversor 2
   VerificaInversor2();
+
+// Verifica o Modo de Operacao e a Habilitacao das Cargas
+  VerificaModoOp();
 
   // Atualiza os estados da Caixa Azul
   VerifEstCxAz();
@@ -937,7 +937,7 @@ void MontaEDs() {
 
   EDbyte[2] = ModoComando;
   EDbyte[2] = EDbyte[2] | (EstadoInversor2 << 1);
-  EDbyte[2] = EDbyte[2] | (EstadoCarga3 << 2);
+  EDbyte[2] = EDbyte[2] | (EstadoGeladeira << 2);
   EDbyte[2] = EDbyte[2] | (BombaLigada << 3);
   EDbyte[2] = EDbyte[2] | (FlgTmpFT << 4);
   EDbyte[2] = EDbyte[2] | (CTRF << 5);
@@ -1021,6 +1021,15 @@ void ExecutaComando(byte codigo) {
 
       rtc.setDate(tm.Day, 6, tm.Month, 0, tm.Year);
       rtc.setTime(tm.Hour, tm.Minute, tm.Second);
+
+      Serial.print("EstadoInversor1 = ");
+      Serial.println(EstadoInversor1);
+      Serial.print("EstadoGeladeira = ");
+      Serial.println(EstadoGeladeira);
+      Serial.print("DJEINV1 = ");
+      Serial.println(digitalRead(DJEINV1));
+      Serial.print("VSInv1 = ");
+      Serial.println(VSInv1);
    
     break;
   
@@ -1286,28 +1295,22 @@ void VerificaTensaoRede() {
 //*********************************************************************************************************************
 // Nome da Rotina: VerificaCarga3                                                                                     *
 //                                                                                                                    *
-// Funcao: atualiza a variavel EstadoCarga3 de acordo com a corrente da Carga 3                                       *
+// Funcao: atualiza a variavel EstadoGeladeira de acordo com a corrente da Carga 3                                    *
 //                                                                                                                    *
 // Entrada: EA[15] = corrente da carga 3 em mA                                                                        *
-// Saida: variavel byte EstadoCarga3 (0 = desligada) / (1 = ligada)                                                   *
+// Saida: variavel byte EstadoGeladeira (0 = desligada) / (1 = ligada)                                                *
 //*********************************************************************************************************************
 //
 void VerificaCarga3() {
 
-  if (ICg3 < LIMICC3) {         // Se a corrente da Carga 3 cair abaixo de 100mA
-    EstadoCarga3 = 0;           // Atualiza o estado para desligado,
+  if (ICg3 < LIMICC3) {   // Se a corrente da Geladeira cair abaixo de 100mA
+    EstadoGeladeira = 0;  // Atualiza o estado para desligado,
   }
 
-  if ((ICg3 >= LIMSCC3) && (ICg3 <= LIMFCC3)) {  // Se a corrente da Carga 3 > 400mA e menor que 800mA
-    EstadoCarga3 = 1;           // Atualiza o estado para ligado
+  if (ICg3 >= LIMSCC3) {  // Se a corrente da Geladeira > 400mA
+    EstadoGeladeira = 1;  // Atualiza o estado para ligado
   }
 
-  if (digitalRead(SD02) == HIGH) {  // Se a Carga 3 esta para o Inversor,
-    if (ICg3 > LIMFCC3) {           // e se a corrente da Carga 3 > 800mA
-      FalhaCarga3 = 1;              // Aciona o indicador de falha,
-      Carga3 = 0;                   // e desabilita a Carga 3
-    }
-  }
 }
 
 //*********************************************************************************************************************
@@ -1405,63 +1408,44 @@ void VerificaModoOp() {
     }
   }
   
-  
   if ((ModoOperacao == 0) || (EAME0 < VMinBat)) {  // Se Modo de Operacao = Economia ou Tensão 24Vcc está baixa,
     CT1_Rede();                                    // passa CT1 para a Rede (Carga 2 - Torre)
     CT3_Rede();                                    // passa CT3 para a Rede (Carga 3 - Portao e Iluminacao Externa)
     CT2_Rede();                                    // passa CT2 para a Rede (Carga 1 - Casa Verde e Oficina)
-    DesligaInversor2();                            // e desliga o Inversor 1
+    DesligaInversor2();                            // e desliga o Inversor 2
+    DesligaInversor1();                            // e desliga o Inversor 1
   }
   else {                               // Se o Modo de Operacao = Normal e a tensão 24Vcc está maior que o mínimo
     if (EstadoRede == 1) {             // e se a Tensao da Rede esta OK,
-      if (OpOnGrid) {                  // e se é o modo de operação On Grid,
             
-        if (Carga2 == 1) { 
-          if (FalhaInversor2 == 0) {
-            if (EAME0 > 2350) {
-              LigaInversor2();
-              CT1_Inversor();
-            }
+      if (Carga2 == 1) { 
+        if (FalhaInversor2 == 0) {
+          if (EAME0 > 2350) {
+            LigaInversor2();
+            CT1_Inversor();
           }
         }
-        else {
-          CT1_Rede();
-          if (Carga3 == 1) {
-            Carga3 = 0;
-            CT3_Rede();
-          }
-          if (Carga1 == 1) {
-            Carga1 = 0;
-            CT2_Rede();
-          }
-          if (EstadoInversor2 == 1) {
-            DesligaInversor2();
-          }
+      }
+      else {
+        CT1_Rede();
+        if (EstadoInversor2 == 1) {
+          DesligaInversor2();
         }
+      }
 
-        if (Carga3 == 1) {
-          if (EstadoInversor2 == 1) {
-            if (EAME0 > 2500) {
-              CT3_Inversor();
-            }
+      if (Carga3 == 1) {
+        if (EstadoInversor2 == 1) {
+          if (EAME0 > 2500) {
+            CT3_Inversor();
           }
         }
-        else {                                   // Se a Carga3 está desabilitada,
-          CT3_Rede();                            // passa a Carga3 para a Rede,
-        }
+      }
+      else {                               // Se a Carga3 está desabilitada,
+        CT3_Rede();                        // passa a Carga3 para a Rede,
+      }
 
-        if (Carga1 == 1) {
-          if (EstadoInversor2 == 1) {
-            if (EAME0 > 2550) {
-              CT2_Inversor();
-            }
-          }
-        }
-        else {                                   // Se a Carga1 está desabilitada,
-          CT2_Rede();                            // passa CT2 para a Rede
-        }
-        
-      } // if (OpOnGrid)
+      ControlaCarga1();
+      
     } // if (EstadoRede == 1)
 
     //*****************************************************************************************************
@@ -1470,10 +1454,12 @@ void VerificaModoOp() {
     //
     if (EstadoRede == 0) {
       
-      if (FalhaInversor2 == 0) {   // Se nao ha falha no Inversor 1,
-        if (EAME0 > 2350) {        // e se a Tensão 24Vcc está maior que o mínimo
-          LigaInversor2();         // Liga o Inversor 1,
-          CT1_Inversor();          // e passa CT1 para o Inversor 1 (Carga 2 => Torre)
+      if (EAME0 > 2400) {              // Se a Tensão 24Vcc está maior que o mínimo,
+        if (FalhaInversor2 == 0) {     // e se nao ha falha no Inversor 2 (Direita),
+          LigaInversor2();             // liga o Inversor 2 (Direita).
+          if (EstadoInversor2 == 1) {  // Se o Inversor 2 está ligado,
+            CT1_Inversor();            // passa CT1 para o Inversor 2 (Carga 2 => Torre)
+          }
         }
       }
 
@@ -1493,28 +1479,56 @@ void VerificaModoOp() {
       else {        // se a Carga3 não está no Inversor 1 e não está habilitada na falta de CA, passa CT3 para a rede
         CT3_Rede();
       }
+
+      ControlaCarga1();
       
-      if (Carga1 == 1) {
-        if (EstadoInversor2 == 1) {
-          if (EAME0 > 2550) {
-            CT2_Inversor();
-          }
-          if (EAME0 < 2450) {
-            CT2_Rede();
-          }
-        }
-        else {
-          CT2_Rede();
-        }
-      }
-      else {
-        CT2_Rede();
-      }
-  
     } // if (EstadoRede == 0)
   } // else if ((ModoOperacao == 0) || (EAME0 < VMinBat))
   
 }
+
+
+//*********************************************************************************************************************
+// Nome da Rotina: ControlaCarga1()                                                                                   *
+//                                                                                                                    *
+// Funcao: controla a ativação e desativação da Carga1 e do Inversor1                                                 *
+//                                                                                                                    *
+// Entrada: não tem                                                                                                   *
+//                                                                                                                    *
+// Saida: não tem                                                                                                     *
+//*********************************************************************************************************************
+//
+void ControlaCarga1() {
+
+  if (Carga1 == 1) {                 // Se a Carga1 está habilitada,
+    if (EAME0 > 2600) {              // se a tensão 24Vcc permite,
+      if (FalhaInversor1 == 0) {     // e se nao ha falha no Inversor 1 (Esquerda),
+        LigaInversor1();             // liga o Inversor 1 (Esquerda).
+        if (EstadoGeladeira == 0) {  // Se a Geladeira está desligada,
+          CT2_Inversor();            // passa a Carga1 (Casa Verde e Oficina) para o Inversor 1
+        }
+      }
+      else {                         // Se há falha no Inversor 1,
+        DesligaInversor1();          // Desliga o Inversor 1,
+        if (EstadoGeladeira == 0) {  // Se a Geladeira está desligada,
+          CT2_Rede();                // passa a Carga1 (Casa Verde e Oficina) para a rede.
+        }
+      }
+          
+      if (EAME0 < 2400) {            // Se a tensão 24Vcc está abaixo do mínimo para a Carga1,
+        DesligaInversor1();          // Desliga o Inversor 1
+        CT2_Rede();
+      }
+    }
+  }
+  else {                         // Se a Carga1 está desabilitada,
+    DesligaInversor1();          // desliga o Inversor 1.
+    if (EstadoGeladeira == 0) {  // Se a Geladeira está desligada,
+      CT2_Rede();                // passa a Carga1 para a rede.
+    }
+  }
+  
+} // Fim da Rotina
 
 
 //*********************************************************************************************************************
@@ -1645,7 +1659,7 @@ void CT2_Rede() {
 //*********************************************************************************************************************
 // Nome da Rotina: CT2_Inversor()                                                                                     *
 //                                                                                                                    *
-// Funcao: passa CT2 (Carga1 - Casa Verde e Oficina) para o Inversor 2                                                *
+// Funcao: passa CT2 (Carga1 - Casa Verde e Oficina) para o Inversor 1                                                *
 //                                                                                                                    *
 // Entradas: nenhuma                                                                                                  *
 // Saidas: nenhuma                                                                                                    *
@@ -1654,7 +1668,7 @@ void CT2_Rede() {
 void CT2_Inversor() {
 
   if (digitalRead(SD17) == LOW) {    // Se CT2 esta para a rede,
-      if (EstadoInversor2 == 1) {    // e se o Inversor 2 esta ligado e funcionando,
+      if (EstadoInversor1 == 1) {    // e se o Inversor 2 esta ligado e funcionando,
         digitalWrite(SD17, HIGH);    // passa CT2 para o Inversor 1
       }
   }
@@ -2111,7 +2125,7 @@ void DesligaInversor1() {
 
 
 //*********************************************************************************************************************
-// Nome da Rotina: VerificaInversor1 (Inversor 1 é o da esquerda que alimenta a bomba de água do poço)                *
+// Nome da Rotina: VerificaInversor1 (Inversor 1 é o da esquerda que alimenta a Casa Verde e Oficina)                 *
 //                                                                                                                    *
 // Funcao: verifica o funcionamento do Inversor 1, liga os indicadores de alarme e aciona os LEDs                     *
 //                                                                                                                    *
@@ -2122,62 +2136,50 @@ void DesligaInversor1() {
 void VerificaInversor1() {
 
   if (digitalRead(SD01) == HIGH) {    // Se o Circuito de Controle do Inversor 1 esta ligado,
-    if (digitalRead(DJEINV1) == 1) {  // se o disjuntor de entrada 24Vcc esta ligado,
       
-      if (VSInv1 >= VMinInv1) {       // Se a saida 220VCA esta com a tensao normal:
-        if (VSInv1 < VMaxInv1) {
-          EstadoInversor1 = 1;        // Sinaliza Inversor 1 Ligado e Funcionando
-          CTIV1 = 0;                  // Zera o contador de tempo de espera para o inversor ligar
-        }
+    if (VSInv1 >= VMinInv1) {       // Se a saida 220VCA esta com a tensao normal:
+      EstadoInversor1 = 1;          // Sinaliza Inversor 1 Ligado e Funcionando
+      CTIV1 = 0;                    // Zera o contador de tempo de espera para o inversor ligar
+    }
+    if (VSInv1 < VMinInv1) {        // Caso a tensao de saida do Inversor 1 esteja baixa,
+      CTIV1 = CTIV1 + 1;            // incrementa o contador de espera para o inversor ligar.
+      if (CTIV1 > CTRI) {           // Se o inversor nao voltar ao normal em 5 segundos:
+        CTIV1 = 0;                  //   1) Zera o contador de espera
+        FalhaInversor1 = 1;         //   2) Liga alarme sinalizando ocorrencia de falha no inversor
+        SubTensaoInv1 = 1;          //   3) Liga o indicador que indica subtensao na saida do inversor
+        EstadoInversor1 = 0;        //   4) Atualiza o estado do inversor 1
       }
-      if (VSInv1 < VMinInv1) {        // Caso a tensao de saida do Inversor 1 esteja baixa,
-        CTIV1 = CTIV1 + 1;            // incrementa o contador de espera para o inversor ligar.
-        if (CTIV1 > CTRI) {           // Se o inversor nao voltar ao normal em 5 segundos:
-          CTIV1 = 0;                  //   1) Zera o contador de espera
-          FalhaInversor1 = 1;         //   2) Liga alarme sinalizando ocorrencia de falha no inversor
-          SubTensaoInv1 = 1;          //   3) Liga o indicador que indica subtensao na saida do inversor
-          EstadoInversor1 = 0;        //   4) Atualiza o estado do inversor 1
-        }
-      }
-      if (VSInv1 >= VMaxInv1) {       // Se a tensao de saida do Inversor 1 esta alta
-          FalhaInversor1 = 1;         // Liga alarme sinalizando ocorrencia de falha no inversor
-          SobreTensaoInv1 = 1;        // Liga o indicador de sobretensao na saida do inversor
-          EstadoInversor1 = 0;        // Atualiza o estado do inversor 1
-      }
+    }
+    if (VSInv1 >= VMaxInv1) {       // Se a tensao de saida do Inversor 1 esta alta
+      FalhaInversor1 = 1;         // Liga alarme sinalizando ocorrencia de falha no inversor
+      SobreTensaoInv1 = 1;        // Liga o indicador de sobretensao na saida do inversor
+      EstadoInversor1 = 0;        // Atualiza o estado do inversor 1
+    }
     
-      if (TDInv1 >= LiTDInv) {        // Se a temperatura do driver do Inversor 1 esta alta,
-        FalhaInversor1 = 1;           // liga alarme sinalizando ocorrencia de falha no inversor,
-        SobreTempDrInv1 = 1;          // liga o indicador sobretemperatura no driver do inversor,
-        EstadoInversor1 = 0;          // e atualiza o estado do inversor 1
-      }
-
-      if (TTInv1 >= LiTTInv) {        // Se a temperatura do transformador do Inversor 1 esta alta,
-        FalhaInversor1 = 1;           // liga alarme sinalizando ocorrencia de falha no inversor,
-        SobreTempTrInv1 = 1;          // liga o indicador que indica sobretemperatura no transformador do inversor,
-        EstadoInversor1 = 0;          // e atualiza o estado do inversor 1
-      }
-
-      if (IEInv1 >= IMaxInv1) {       // Se a corrente de entrada do Inversor 1 esta alta,
-        FalhaInversor1 = 1;           // liga alarme sinalizando ocorrencia de falha no inversor,
-        SobreCorrenteInv1 = 1;        // liga o indicador que indica sobretemperatura no transformador do inversor,
-      }
-    }
-    else {                            // Se o disjuntor de entrada 24Vcc esta aberto,
-      //FalhaInversor1 = 1;           // liga alarme sinalizando ocorrencia de falha no inversor,
-      //DisjAbertoIv1 = 1;            // liga indicador identificando a falha
-      //EstadoInversor1 = 0;          // Atualiza o estado do inversor 1
+    if (TDInv1 >= LiTDInv) {        // Se a temperatura do driver do Inversor 1 esta alta,
+      FalhaInversor1 = 1;           // liga alarme sinalizando ocorrencia de falha no inversor,
+      SobreTempDrInv1 = 1;          // liga o indicador sobretemperatura no driver do inversor,
+      EstadoInversor1 = 0;          // e atualiza o estado do inversor 1
     }
 
+    if (TTInv1 >= LiTTInv) {        // Se a temperatura do transformador do Inversor 1 esta alta,
+      FalhaInversor1 = 1;           // liga alarme sinalizando ocorrencia de falha no inversor,
+      SobreTempTrInv1 = 1;          // liga o indicador que indica sobretemperatura no transformador do inversor,
+      EstadoInversor1 = 0;          // e atualiza o estado do inversor 1
+    }
+
+    if (IEInv1 >= IMaxInv1) {       // Se a corrente de entrada do Inversor 1 esta alta,
+      FalhaInversor1 = 1;           // liga alarme sinalizando ocorrencia de falha no inversor,
+      SobreCorrenteInv1 = 1;        // liga o indicador que indica sobretemperatura no transformador do inversor,
+    }
+    
     if (FalhaInversor1 == 1) {
       DesligaInversor1();
     }
 
-    if ((EstadoCxAz < 1) || (EstadoCxAz > 2)) {  // Se a Caixa Azul esta cheia ou ha falha,
-      DesligaInversor1();                        // desliga o Inversor 1
-    }
   }
-  else {                                         // Se o Inversor 1 esta desligado,
-    EstadoInversor1 = 0;                         // sinaliza
+  else {                              // Se o Inversor 1 esta desligado,
+    EstadoInversor1 = 0;              // sinaliza
   }
 
 }
