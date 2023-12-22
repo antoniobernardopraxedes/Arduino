@@ -1465,10 +1465,10 @@ void VerificaModoOp() {
 
       if ((Carga3 == 1) || (ModoControle == 1)) {  // Se a Carga3 está no Inversor 1 ou habilitada na falta de CA,
         if (EstadoInversor2 == 1) {  // e se o Inversor 1 está ligado,
-          if (EAME0 > 2500) {        // e se a tensão 24Vcc permite,
+          if (EAME0 > 2450) {        // e se a tensão 24Vcc permite,
             CT3_Inversor();          // passa CT3 para o Inversor 1
           }
-          if (EAME0 < 2400) {        // Se a tensão 24Vcc está abaixo do mínimo para esta carga,
+          if (EAME0 < 2350) {        // Se a tensão 24Vcc está abaixo do mínimo para esta carga,
             CT3_Rede();              // passa CT3 para a rede
           }
         }
@@ -1500,32 +1500,18 @@ void VerificaModoOp() {
 //
 void ControlaCarga1() {
 
-  if (Carga1 == 1) {                 // Se a Carga1 está habilitada,
-    if (EAME0 > 2600) {              // se a tensão 24Vcc permite,
-      if (FalhaInversor1 == 0) {     // e se nao ha falha no Inversor 1 (Esquerda),
-        LigaInversor1();             // liga o Inversor 1 (Esquerda).
-        if (EstadoGeladeira == 0) {  // Se a Geladeira está desligada,
-          CT2_Inversor();            // passa a Carga1 (Casa Verde e Oficina) para o Inversor 1
-        }
-      }
-      else {                         // Se há falha no Inversor 1,
-        DesligaInversor1();          // Desliga o Inversor 1,
-        if (EstadoGeladeira == 0) {  // Se a Geladeira está desligada,
-          CT2_Rede();                // passa a Carga1 (Casa Verde e Oficina) para a rede.
-        }
-      }
-          
-      if (EAME0 < 2400) {            // Se a tensão 24Vcc está abaixo do mínimo para a Carga1,
-        DesligaInversor1();          // Desliga o Inversor 1
-        CT2_Rede();
+  if (Carga1 == 1) {             // Se a Carga1 está habilitada,
+    if (EstadoInversor2 == 1) {  // Se o Inversor 2 está ligado,
+      if (EAME0 > 2450) {        // se a tensão 24Vcc permite,
+        CT2_Inversor();          // passa a Carga1 (Casa Verde e Oficina) para o Inversor 2
       }
     }
-  }
-  else {                         // Se a Carga1 está desabilitada,
-    DesligaInversor1();          // desliga o Inversor 1.
-    if (EstadoGeladeira == 0) {  // Se a Geladeira está desligada,
+    if (EAME0 < 2350) {          // Se a tensão 24Vcc está abaixo do mínimo para a Carga1,
       CT2_Rede();                // passa a Carga1 para a rede.
     }
+  }
+  else {                           // Se a Carga1 está desabilitada,
+    CT2_Rede();                    
   }
   
 } // Fim da Rotina
@@ -1668,9 +1654,7 @@ void CT2_Rede() {
 void CT2_Inversor() {
 
   if (digitalRead(SD17) == LOW) {    // Se CT2 esta para a rede,
-      if (EstadoInversor1 == 1) {    // e se o Inversor 2 esta ligado e funcionando,
-        digitalWrite(SD17, HIGH);    // passa CT2 para o Inversor 1
-      }
+    digitalWrite(SD17, HIGH);    // passa CT2 para o Inversor 1
   }
  
 }
