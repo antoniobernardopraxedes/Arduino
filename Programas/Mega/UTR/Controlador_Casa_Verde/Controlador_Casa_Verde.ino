@@ -1,13 +1,8 @@
 //*************************************************************************************************************
 // Programa do Equipamento Unidade Terminal Remota (UTR) com Arduíno Mega usando Interface Serial             *
 //                                                                                                            *
-// Data: 07/02/2024                                                                                           *
+// Data: 11/02/2024                                                                                           *
 //                                                                                                            *
-// O programa foi modificado para operação normal usando a energia da rede e inversor off grid. Na falta da   *
-// energia da rede, o sistema entra em modo off grid, ligando o Inversor 1, alimentando a carga 2 (Torre), e  *
-// alimentando a Carga3 (Portão, Câmeras e Luzes da Entrada) se a tensão de 24Vcc for maior que 25V e se a    *
-// Carga3 está habilitada para ligar na falta de CA. Também na falta de CA, dois paineis fotovoltaicos são    *
-// conectados ao controlador de carga.                                                                        *
 //                                                                                                            *
 //*************************************************************************************************************
 
@@ -173,8 +168,6 @@
 //
 // Constantes
 
-const boolean OpOnGrid = true;   // Define modo de operação do programa com prioridade On Grid
-
 const int NCCMEA = TCMEA/BTPP;   // Numero de Ciclos para Calculo da Media das Entradas Analogicas
 const int NCTRCT1 = TECT1/BTPP;  // Numero de Ciclos de Espera para Transferir na CT1
 const int NCTRCT2 = TECT2/BTPP;  // Numero de Ciclos de Espera para Transferir na CT2
@@ -241,8 +234,6 @@ int HorNasSol;
 int HorPorSol;
 
 // Variaveis de Hora e Minuto
-int HHLB  =  900;   // Hora que habilita ligar o inversor da bomba
-int HDLB  = 1530;   // Hora que desabilita ligar o inversor da bomba
 int HHC1  =  700;   // Hora que habilita ligar a Carga 1
 int HDC1  = 2300;   // Hora que desabilita ligar a Carga 1
 int HHC2  =  700;   // Hora que habilita ligar a Carga 2
@@ -251,7 +242,6 @@ int HHC3  =  730;   // Hora que habilita ligar a Carga 3
 int HDC3  = 1700;   // Hora que desabilita ligar a Carga 3
 int HHC4  =  900;   // Hora que habilita ligar a Carga 4
 int HDC4  = 1530;   // Hora que desabilita ligar a Carga 4
-int HDCAB = 1700;   // Hora que desabilita CA para a Bomba em modo geracao solar
 
 // Medidas
 double EA[16];        // Array com os Valores da Media das Entradas Analogicas
@@ -279,7 +269,7 @@ double IEInv2;        // EA15 - Corrente CC: Entrada do Inversor 2
 byte EstadoInversor1;  // Inversor 1 - 1 = Ligado / 0 = Desligado
 byte EstadoInversor2;  // Inversor 2 - 1 = Ligado / 0 = Desligado
 byte EstadoRede;       // Estado da Tensao da Rede
-byte Estado24Vcc;      // Estado da Tensao 24Vcc
+//byte Estado24Vcc;      // Estado da Tensao 24Vcc
 byte EstadoFontes;     // Estado das fontes CC
 byte EstadoGeladeira;  // Estado da Carga 3: 0 = Desligada / 1 = Ligada
 byte EstadoCxAz;       // Estado da Caixa Azul: 0=Indefinido / 1=Prec Ench Niv Baixo / 2=Prec Ench Niv Norm/ 3=Cheia
@@ -292,11 +282,10 @@ byte Carga2;           // 0 = Desabilita Carga 2 / 1 = Habilita Carga 2
 byte Carga3;           // 0 = Desabilita Carga 3 / 1 = Habilita Carga 3
 byte Carga4;           // 0 = Desabilita Carga 4 / 1 = Habilita Carga 4
 byte BombaLigada;      // 0 = Bomba Desligada / 1 = Bomba Ligada
-byte HabCABmb;
 
 boolean OpOffGrid;    // Indica tipo de operação
 
-boolean LigaFonte;    // Indica que a fonte CC deve ser ligada
+//boolean LigaFonte;    // Indica que a fonte CC deve ser ligada
 
 // Variaveis de Alarme
 byte FalhaInversor1;
@@ -485,8 +474,7 @@ void setup() {
   EstadoInversor1 = 0;
   EstadoInversor2 = 0;
   EstadoCxAz = 0;          // Inicia o Estado da Caixa Azul = Indefinido
-  HabCABmb = 0;            // Inicia com a o CA da Bomba Desabilitado
-  
+    
   // Zera os Alarmes
   FalhaInversor1 = 0;
   SubTensaoInv1 = 0;
@@ -518,7 +506,7 @@ void setup() {
   Carga3 = 0;              // Inicia a Carga 3 desabilitada
   Carga4 = 0;              // Inicia a Carga 4 desabilitada
   BombaLigada = 0;         // Inicia o indicador de Bomba Ligada
-  LigaFonte = false;
+  //LigaFonte = false;
   HabTmpBombaLig = false;
   HabTmpCxAzNvBx = false;
   Silencia = false;
@@ -527,7 +515,7 @@ void setup() {
 
   OpOffGrid = false;
   
-  AcertaRelogio = 0;
+  //AcertaRelogio = 0;
 
   VemDoReset = true;
   
@@ -738,16 +726,11 @@ void CalculaHorarios() {
   HDC2 = HorPorSol - 100;   // Hora que desabilita ligar a Carga 2
   
   HHC3 = HorNasSol + 100;   // Hora que habilita ligar a Carga 3
-  HDC3 = HorPorSol - 200;   // Hora que desabilita ligar a Carga 3
+  HDC3 = HorPorSol - 100;   // Hora que desabilita ligar a Carga 3
   
-  HHC4 = HorNasSol + 300;   // Hora que habilita ligar a Carga 4
-  HDC4 = HorPorSol - 300;   // Hora que desabilita ligar a Carga 4
-  
-  HHLB = HorNasSol + 300;   // Hora que habilita ligar o inversor da bomba
-  HDLB = HorPorSol - 300;   // Hora que desabilita ligar o inversor da bomba
-  
-  HDCAB = HorPorSol - 100;  // Hora que desabilita CA para a Bomba em modo geracao solar
-  
+  HHC4 = HorNasSol + 200;   // Hora que habilita ligar a Carga 4
+  HDC4 = HorPorSol - 200;   // Hora que desabilita ligar a Carga 4
+   
 }
 
 
@@ -932,6 +915,11 @@ void ComunicacaoSerial() {
 //*********************************************************************************************************************
 //
 void MontaEDs() {
+
+  byte OperacaoOffGrid = 0;
+  if (OpOffGrid) {
+    OperacaoOffGrid = 1;
+  }
   
   EDbyte[0] = digitalRead(DJEINV1);
   EDbyte[0] = (EDbyte[0] | (digitalRead(CircuitoBoia) << 1));
@@ -994,7 +982,7 @@ void MontaEDs() {
   EDbyte[6] = EDbyte[6] | (digitalRead(SD16) << 4);
   EDbyte[6] = EDbyte[6] | (digitalRead(SD17) << 5);
   EDbyte[6] = EDbyte[6] | (digitalRead(EdCxAzCheia) << 6);
-  EDbyte[6] = EDbyte[6] | (digitalRead(FonteCC2Lig) << 7);
+  EDbyte[6] = EDbyte[6] | (OperacaoOffGrid << 7);
   
   EDbyte[7] = digitalRead(FonteCC1Lig);
   EDbyte[7] = EDbyte[7] | (SobreCorrenteInv1 << 1);
@@ -1630,31 +1618,37 @@ void ControlaCarga1() {
 void ControlaCarga4(int HrMn) {
 
   if (Carga4 == 1) {                           // Se a Carga4 está habilitada,
-    if (EstadoRede == 0) {                     // se há falta de Tensão CA,
-      if ((HrMn >= 1000) && (HrMn <= 1800)) {  // se o horário permite,
-        if (EAME0 > 2700) {                    // e se a tensão 24Vcc permite,
-          LigaInversor1();                     // e liga o Inversor1,
-          CT4_Inversor();                      // e passa a Carga4 para o Inversor1.
+    if (EstadoGeladeira == 0) {                // se o motor da geladeira está desligado,
+      if ((HrMn >= HHC4) && (HrMn <= HDC4)) {  // se o horário permite,
+        if (EAME0 > 2700) {                    // se a tensão 24Vcc permite,
+          if (EstadoInversor1 == 0) {          // e se o Inversor1 está desligado,
+            LigaInversor1();                   // liga o Inversor1,
+          }
+          else {                               // Se o Inversor1 está ligado,
+            CT4_Inversor();                    // passa a Carga4 (Geladeira) para o Inversor1.
+          }
         }
       }
-      else {                                   // Se o horário não permite,
-        DesligaInversor1();                    // desliga o Inversor1.
-        CT4_Rede();                            // e passa a Carga4 para a Rede.
+      else {                         // Se o horário não permite,
+        if (EstadoGeladeira == 0) {  // e se o motor da geladeira está desligado,
+          DesligaInversor1();        // desliga o Inversor1.
+          CT4_Rede();                // e passa a Carga4 para a Rede.
+        }
       }
-    
-      if (EAME0 < 2450) {                      // Se a tensão 24Vcc está abaixo do mínimo para a Carga4,
-        DesligaInversor1();                    // desliga o Inversor1.
-        CT4_Rede();                            // e passa a Carga4 para a Rede.
-      }
-    }
-    else {                                     // Se a Tensão CA está normal,
-      DesligaInversor1();                      // desliga o Inversor1.
-      CT4_Rede();                              // e passa a Carga4 para a Rede.
     }
   }
-  else {                                     // Se a Carga4 está desabilitada,
-    DesligaInversor1();                      // desliga o Inversor1.
-    CT4_Rede();                              // e passa a Carga4 para a Rede.
+  else {                                   // Se a Carga4 está desabilitada,
+    if (EstadoGeladeira == 0) {            // e se o motor da geladeira está desligado,
+      DesligaInversor1();                  // desliga o Inversor1.
+      CT4_Rede();                          // e passa a Carga4 para a Rede.
+    }
+  }
+
+  if (EAME0 < 2500) {            // Se a tensão 24Vcc está abaixo do mínimo para a Carga4,
+    if (EstadoGeladeira == 0) {  // e se o motor da geladeira está desligado,
+      DesligaInversor1();        // desliga o Inversor1.
+      CT4_Rede();                // e passa a Carga4 para a Rede.
+    }
   }
   
 } // Fim da Rotina
