@@ -4,7 +4,7 @@
 //                                                                                                                    *
 // Autor: Antonio Bernardo de Vasconcellos Praxedes                                                                   *
 //                                                                                                                    *
-// Data: 11/10/2023                                                                                                   *
+// Data: 25/10/2023                                                                                                   *
 //                                                                                                                    *
 //*********************************************************************************************************************
 
@@ -46,9 +46,10 @@ double EAME0;         // Variavel com a Media estendida da Entrada Analogica 0 =
 double EAMET0;        // Variavel com o acumulador para calculo da media estendida da Tensao 24Vcc
 
 // Medidas Gerais
-double Icarga3;       // Corrente Carga 3 (Geladeira)
+double Icarga3;       // Corrente Carga
 double VRede;         // Tensão da Rede
 double VBat;          // Tensão do Banco de Baterias
+double VFontes;       // Tensão das 3 Fontes CC em série
 double VMBat;         // Tensão Média Estendida do Banco de Baterias
 double ICircCC;       // Corrente Total dos Circuitos CC
 double WCircCC;       // Potência Total dos Circuitos CC
@@ -396,6 +397,9 @@ void ComunicacaoEthernet() {
       EfetuaCalculos();                       // Calcula um conjunto de Variaveis
       MontaMsgRspCoAP(Comando);               // Transmite as informacoes pela Interface Ethernet
       Comando = 0;
+      
+      //TransRecMsg(1);
+      
     }
   } // if (packetSize)
 } // Fim da Rotina ComunicacaoEthernet
@@ -537,7 +541,7 @@ boolean ComunicacaoSerial() {
 
       // Carrega as EAs recebidas da UTR Arduino Mega nas variaveis
       VBat = MontaEA(MsgRxS1[20], MsgRxS1[21]);         // Tensao do Barramento Principal 24Vcc
-      EA[1] = MontaEA(MsgRxS1[22], MsgRxS1[23]);        // Reserva
+      VFontes = MontaEA(MsgRxS1[22], MsgRxS1[23]);      // Tensao das 3 Fontes CC em serie
       TDInv2 = MontaEA(MsgRxS1[24], MsgRxS1[25]);       // Temperatura do Driver do Inversor 2 
       ICircCC = MontaEA(MsgRxS1[26], MsgRxS1[27]);      // Corrente CC: Circuitos de Corrente Continua
       VSIv1 = MontaEA(MsgRxS1[28], MsgRxS1[29]);        // Tensao CA: Saida do Inversor 1
@@ -555,6 +559,9 @@ boolean ComunicacaoSerial() {
       EAME0 = MontaEA(MsgRxS1[52], MsgRxS1[53]);        // Tensao CC: media da tensao de 24Vcc
       TmpBombaLig = MontaEA(MsgRxS1[54], MsgRxS1[55]);  // Tempo da Bomba ligada
       TmpCxAzNvBx =  MontaEA(MsgRxS1[56], MsgRxS1[57]); // Tempo que a Caixa Azul esta com Nivel Baixo
+
+      Serial.print("VFontes = ");
+      Serial.println(VFontes);
   
     }  // Verifica o CRC e/ou a identificacao da mensagem
   }  // Verifica se ocorreu TimeOut
@@ -764,7 +771,7 @@ void MontaMsgEstados(byte Codigo) {
            
   // Medidas (48): bytes 110 a 253 - 3 bytes por medida
   Carrega_TxBufEst(VBat,110);         // Med[00] - VBat = Tensao do Barramento Principal 24Vcc
-  Carrega_TxBufEst(0,113);            // Med[01] - Reserva
+  Carrega_TxBufEst(VFontes,113);      // Med[01] - Tensao das 3 Fontes CC ligadas em serie
   Carrega_TxBufEst(TDInv1,116);       // Med[02] - Temperatura do Driver do Inversor 1
   Carrega_TxBufEst(ICircCC,119);      // Med[03] - Corrente CC: Circuitos de Corrente Continua
   Carrega_TxBufEst(VSIv1,122);        // Med[04] - Tensao CA: Saida do Inversor 1
@@ -967,7 +974,7 @@ void MontaMsgRspCoAP(byte Codigo) {
            
   // Medidas (64): bytes 160 a 288 - 2 bytes por medida
   CMedTxBuf(VBat,160);         // Med[00] - VBat = Tensao do Barramento Principal 24Vcc
-  CMedTxBuf(0,162);            // Med[01] - Reserva
+  CMedTxBuf(VFontes,162);      // Med[01] - VFontes = Tensão das 3 Fontes CC em Série
   CMedTxBuf(TDInv1,164);       // Med[02] - Temperatura do Driver do Inversor 1
   CMedTxBuf(ICircCC,166);      // Med[03] - Corrente CC: Circuitos de Corrente Continua
   CMedTxBuf(VSIv1,168);        // Med[04] - Tensao CA: Saida do Inversor 1
@@ -1447,4 +1454,163 @@ unsigned int DoisBytesParaInt(byte BL, byte BH) {
   if (BL < 0) { ByteL = 256 + BL; }
   if (BH < 0) { ByteH = 256 + BH; }
   return (ByteL + 256*ByteH);
+}
+
+
+//********************************************************************************************************
+// Nome da Rotina: TransRecMsg()                                                                  *
+//                                                                                                       *
+// Funcao: monta e transmite a mensagem de chamada em protocolo MODBUS RTU para a Serial2                *
+//         para leitura dos Controladores de Carga 1 e 2                                                 *
+//                                                                                                       *
+// Entrada: numero da interface serial (0 = A ou 1 = B)                                                  *
+// Saida: nao tem                                                                                        *
+//                                                                                                       *
+//********************************************************************************************************
+//
+void TransRecMsg(byte serial) {
+
+  byte Endereco = 1;
+  byte Funcao = 3; // Read Holding Registers
+  unsigned int RegIni = 0x9000;
+  unsigned int NumReg = 19;
+  byte NBMsgR = 5 + (NumReg * 2);
+  unsigned int cont = 0;
+  unsigned int CRC = 0xffff;
+  byte lsb;
+
+  byte MsgTx[8];
+  byte MsgRx[128];
+  unsigned int Medida1[20];
+    
+  // Carrega na mensagem a ser enviada as informacoes                               
+  MsgTx[0] = Endereco;
+  MsgTx[1] = Funcao;
+  MsgTx[2] = ByteH(RegIni);
+  MsgTx[3] = ByteL(RegIni);
+  MsgTx[4] = ByteH(NumReg);
+  MsgTx[5] = ByteL(NumReg);
+
+  // Calcula o CRC16 e carrega nos ultimos dois bytes da mensagem
+  for (int j = 0; j < 6; j++) {
+    CRC = CRC ^ MsgTx[j];
+    for (int i = 0; i < 8; i++) {
+      lsb = CRC & 0x0001;
+      if (lsb == 0){
+        CRC = CRC / 2;
+      }
+      if (lsb == 1) {
+        CRC = CRC / 2;
+        CRC = CRC^0xA001;
+      }
+    }
+  }
+     
+  MsgTx[6] = ByteL(CRC);
+  MsgTx[7] = ByteH(CRC);
+  
+  if (serial == 0) {           // Se a comunicacao com o CC1 esta habilitada,
+    digitalWrite(RE1, HIGH);   // desabilita a recepcao do RS485 do CC1
+    digitalWrite(DE1, HIGH);   // habilita a transmissao para o RS485 do CC1
+  }
+
+  if (serial == 1) {           // Se a comunicacao com o CC2 esta habilitada,
+    digitalWrite(RE2, HIGH);   // desabilita a recepcao do RS485 do CC2  
+    digitalWrite(DE2, HIGH);   // e habilita a transmissao para o RS485 do CC2
+  }
+ 
+  // Transmite a Mensagem de Chamada pela Serial2
+  delay(10);
+  for (int i = 0; i < 8; i++) {
+    Serial2.write(MsgTx[i]);    // Envia o byte para o buffer de transmissao
+    delayMicroseconds(EsperaByte);
+  }
+
+  delay(10);
+  
+  if (serial == 0) {           // Se a comunicacao com o CC1 esta habilitada,
+    digitalWrite(DE1, LOW);    // Desabilita a transmissao para o RS485 do CC1,
+    digitalWrite(RE1, LOW);    // e habilita a recepcao do RS485 do CC1
+  }
+
+  if (serial == 1) {           // Se a comunicacao com o CC2 esta habilitada,
+    digitalWrite(DE2, LOW);    // Desabilita a transmissao para o RS485 do CC2,
+    digitalWrite(RE2, LOW);    // e habilita a recepcao do RS485 do CC1
+  }
+  delay(20);
+
+  // Inicia as variaveis de indicacao de mensagem OK e timeout
+  cont = 0;
+  CRC = 0xffff;
+  TmoIED[serial] = 0;
+
+  // Le os bytes recebidos pela Interface Serial2
+  //Serial.print("MsgRx[");
+  //Serial.print(serial);
+  //Serial.print("] = ");
+  int cntb = 0;
+  while ((cntb < NBMsgR) && (cont < 10000)) {
+    if (Serial2.available() > 0) {
+      MsgRx[cntb] = Serial2.read();
+      //Serial.print(MsgRx[cntb]);
+      //Serial.print(" ");
+      if (!((cntb == 0) && (MsgRx[cntb] == 0))) {
+        cntb = cntb + 1;
+      }
+      delayMicroseconds(EsperaByte);
+    }
+    cont = cont + 1;
+  }
+  Serial.println("");
+  delay(20);   
+  if (serial == 0) {                          // Se esta selecionada a comunicacao com o CC1,
+    digitalWrite(RE1, HIGH);                  // desabilita a recepcao do RS485 do CC1
+  }
+  else {                                      // Se esta selecionada a comunicacao com o CC2,
+    digitalWrite(RE2, HIGH);                  // desabilita a recepcao do RS485 do CC2
+  }
+
+  if (cont >= 10000) {                         // Se ocorreu timeout na mensagem recebida,
+    TmoIED[serial] = 1;                        // aciona o indicador de timeout
+  }
+  else {                                      // Se nao ocorreu timeout,
+    for (int j = 0; j < (NBMsgR - 2); j++) {  // Calcula o CRC da mensagem recebida,
+      CRC = CRC ^ MsgRx[j];
+      for (int i = 0; i < 8; i++) {
+        lsb = CRC & 0x0001;
+        if (lsb == 0){
+          CRC = CRC / 2;
+        }
+        if (lsb == 1) {
+          CRC = CRC / 2;
+          CRC = CRC^0xA001;
+        }
+      }
+    }
+    
+    // Verifica se a mensagem chegou corretamente
+    if ((MsgRx[NBMsgR - 2] == ByteL(CRC)) && (MsgRx[NBMsgR - 1] == ByteH(CRC))) {   // Se chegou,
+      VerCRCRec[serial] = 1;                                      // aciona o indicador de mensagem OK
+      byte d = 0;
+
+      // Converte os Registros do Buffer de Recepcao do Controlador de Carga 1 e carrega no Array de Medidas
+      if (serial == 1) {
+        for (int i = 0; i < NumReg; i++) {
+          Medida1[i] = (256 * MsgRx[(2 * i) + 3]) + MsgRx[(2 * i) + 4];
+          Serial.print("Registro: ");
+          Serial.print(i);
+          Serial.print(" - Valor: ");
+          Serial.println(Medida1[i]);
+        }
+       
+      }
+      
+    }
+  }
+
+  byte Ch;
+  while (Serial2.available() > 0) {
+    Ch = Serial2.read();
+  }
+
 }

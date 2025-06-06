@@ -1,3 +1,4 @@
+https://www.youtube.com/watch?v=20lAyKzfSEU
 //*****************************************************************************************************
 //                                                                                                    *
 //                 Programa do Controlador da Energia do Starlink Arduino UNO                         *
@@ -19,7 +20,7 @@
 // Definicao das constantes de conversao dos valores analogicos
 #define KMed00      29.966  // Constante da tensão CA
 #define OffMed00    0.0     // Offset da Medida00
-#define KMed01      0.00    // Constante
+#define KMed01      1.527   // Constante
 #define OffMed01    0.0     // Offset
 #define KMed02      0.0     // Constante
 #define OffMed02    0.0     // Offset
@@ -90,7 +91,8 @@ boolean FlagCont2;
 unsigned int Contador1;
 unsigned int Contador2;
 
-boolean FaltaCA;
+boolean FaltaCA = true;
+boolean BatOK = false;
 unsigned int ContRetornoCA;
 
 tmElements_t tm;
@@ -119,7 +121,24 @@ void setup() {
   Contador1 = 0;
   Contador2 = 0;
 
-  FaltaCA = false;
+  CarregaMedidas();
+
+  if (Medida00 > 18000) {
+    FaltaCA = false;
+  }
+
+  if (Medida00 < 14000) {
+    FaltaCA = true;
+  }
+
+  if (Medida01 > 1250) {
+    BatOK = true;
+  }
+
+  if (Medida01 < 1100) {
+    BatOK = false;
+  }
+  
   ContRetornoCA = 0;
   
   // Inicia a Interface Serial Assincrona
@@ -147,33 +166,63 @@ void loop() {
 
   CarregaMedidas();
 
-  Serial.print("Tensão Rede CA = ");
-  Serial.print(Medida00);
-  Serial.print(" - Contador = ");
-  Serial.println(ContRetornoCA);
-
-  if (!FaltaCA) {               // Se não há falta de CA
-    if (Medida00 < 13000) {     // Se a tensão da rede cair abaixo de 130VCA,
-      FaltaCA = true;           // sinaliza falta de CA e
-      digitalWrite(SD1, HIGH);  // passa o relé principal para alimentação pelo inversor
-      delay(3000);              // Espera 3 segundos
-      digitalWrite(SD0, HIGH);  // liga o inversor
+  if (FaltaCA) {                  // Se ocorreu Falta de CA,
+    if (Medida00 > 18000) {       // e se a tensão da rede é maior que 180,00 VCA,
+      ContRetornoCA++;            // incrementa o contador de espera
+      if (ContRetornoCA >= 40) {  // Se o contador de espera chegou a 40s com a tensão CA maior que 180,00 VCA,
+        FaltaCA = false;          // reseta o flag indicador de falta de CA,
+        ContRetornoCA = 0;        // zera o contador de espera
+      }
+    }
+    else {                        // Se a tensão CA cair abaixo de 180,00 VCA,
+      ContRetornoCA = 0;          // zera o contador de espera
+    }
+  }
+  else {                          // Se a tensão CA estava normal,
+    if (Medida00 < 14000) {       // e se a tensão da rede cair abaixo de 140,00 VCA,
+      FaltaCA = true;             // sinaliza na flag,
+      ContRetornoCA = 0;          // e zera o contador de espera
     }
   }
 
-  if (FaltaCA) {                  // Se ocorreu falta de CA,
-    if (Medida00 > 17000) {       // e se a tensão da rede está maior que 170,00V
-      ContRetornoCA++;            // incrementa o contador de espera
-      if (ContRetornoCA >= 40) {  // Se o contador de espera chegar a 40s com a tensão CA maior que 190,00V
-        FaltaCA = false;          // reseta o flag indicador de falta de CA,
-        ContRetornoCA = 0;        // zera o contador de espera
-        digitalWrite(SD0, LOW);   // desliga o inversor
-        delay(3000);              // espera 3 segundos
-        digitalWrite(SD1, LOW);   // passa o relé principal para alimentação pela rede
-      }
+  if (Medida01 > 1250) {
+    BatOK = true;
+  }
+
+  if (Medida01 < 1100) {
+    BatOK = false;
+  }
+
+  Serial.print("Tensão Rede CA = ");
+  Serial.print(Medida00);
+  Serial.print(" / Tensão CC = ");
+  Serial.print(Medida01);
+  Serial.print(" - Contador = ");
+  Serial.println(ContRetornoCA);
+  //Serial.print("Flag Falta CA:  = ");
+  //Serial.print(FaltaCA);
+  //Serial.print(" - Flag Bateria:  = ");
+  //Serial.println(BatOK);
+  
+
+  if (FaltaCA) {                // Se ocorreu falta de CA,
+    if (Medida01 >= 1250) {     // e se a tensão das baterias for maior ou igual a 12,5 Volts,
+      digitalWrite(SD1, HIGH);  // passa o relé principal para alimentação pelo inversor,
+      delay(3000);              // espera 3 segundos,
+      digitalWrite(SD0, HIGH);  // e liga o inversor.
     }
-    else {                        // Se a tensão da rede caiu abaixo de 170,00V
-      ContRetornoCA = 0;          // zera o contador de espera
+  }
+  else {                        // Se a tensão CA está normal,
+    digitalWrite(SD0, LOW);     // desliga o inversor,
+    delay(3000);                // espera 3 segundos,
+    digitalWrite(SD1, LOW);     // e passa o relé principal para alimentação pela rede.
+  }
+  
+  if (digitalRead(SD0) == HIGH) {  // Se o inversor estiver ligado,
+    if (!BatOK) {                  // e se a tensão das baterias estiver baixa,
+      digitalWrite(SD0, LOW);      // desliga o inversor
+      delay(3000);                 // espera 3 segundos
+      digitalWrite(SD1, LOW);      // e passa o relé principal para alimentação pela rede
     }
   }
 
@@ -185,9 +234,6 @@ void loop() {
   }
   else {
     digitalWrite(Led, HIGH);
-    delay(500);
-    digitalWrite(Led, LOW);
-    delay(500);
   }
             
 } // Final do Loop Principal do Programa

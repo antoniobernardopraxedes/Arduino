@@ -1,0 +1,6 @@
+Chama o Multimedidor - Recebida Mensagem do Multimedidor com = 93 Bytes
+Mensagem do Multimedidor: 0 0 0 0 0 0 0 0 0 0 0 0 0 80 0 0 0 0 0 0 0 80 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 FE 89 1 4 58 18 19 5E 43 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+Erro de CRC da Mensagem Recebida
+Enviada Mensagem de Resposta CoAP UDP para o Mestre
+
+
