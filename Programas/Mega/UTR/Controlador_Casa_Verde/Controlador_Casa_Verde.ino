@@ -1310,7 +1310,6 @@ void VerificaFontes() {
   else {                      // Se há falta de tensão CA,
     EstadoFontes = 0;
     digitalWrite(SD06,HIGH);  // desliga as fontes CC,
-    digitalWrite(SD16,LOW);   // desativa os relés e conecta os paineis solares nos Controladores de Carga
   }
 }
 
@@ -1434,18 +1433,18 @@ void VerificaModoOp() {
   if (ModoOperacao == 1) {         // Se o Modo de Operacao = Normal
     if (EstadoRede == 1) {         // e se a Tensao da Rede esta OK,
 
-      if (!OpOffGrid) {            // e se é operação OnGrid,
-        if (EstadoFontes == 1) {   // e se está indicando fontes ligadas e normais,
-          
-          if (EAME0 > 2630) {                // Se a tensão das baterias for maior que 26,30V,
-            if (digitalRead(SD16) == LOW) {  // e se os os paineis estão conectados nos Controladores de Carga,
-              LigaPaineisCC();               // se for horário de sol, conecta os paineis no Inversor OnGrid.
-            }
+      if (!OpOffGrid) {              // e se é operação OnGrid,
+        if (EstadoFontes == 1) {     // e se está indicando fontes ligadas e normais,
+          if (EAME0 > 2630) {        // Se a tensão das baterias for maior que 26,30V,
+            LigaPaineisCC();         // se for horário de sol, conecta os paineis no Inversor OnGrid.
           }
           if (EAME0 < 2570) {        // Se a tensão das baterias estiver abaixo de 25,70 Volts,
             OpOffGrid = true;        // passa para Modo de Operação Off Grid,
             digitalWrite(SD16,LOW);  // e liga os paineis fotovoltaicos nos Controladores de Carga.
           }
+        }
+        else {                       // Se as fontes CC não estão OK,
+          digitalWrite(SD16,LOW);    // liga os paineis fotovoltaicos nos Controladores de Carga.
         }
       }
             
