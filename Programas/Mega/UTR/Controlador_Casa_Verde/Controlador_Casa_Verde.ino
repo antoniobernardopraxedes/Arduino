@@ -1305,12 +1305,12 @@ void VerificaFontes() {
 
   if (EstadoRede == 1) {      // Se a tensão CA está normal,
     EstadoFontes = 1;
-    digitalWrite(SD06, LOW);  // liga as fontes CC,
+    digitalWrite(SD06,LOW);  // liga as fontes CC,
   }
   else {                      // Se há falta de tensão CA,
     EstadoFontes = 0;
     digitalWrite(SD06,HIGH);  // desliga as fontes CC,
-    digitalWrite(SD16,0);     // desativa os relés e conecta os paineis solares nos Controladores de Carga
+    digitalWrite(SD16,LOW);   // desativa os relés e conecta os paineis solares nos Controladores de Carga
   }
 }
 
@@ -1414,8 +1414,8 @@ void VerificaModoOp() {
 
   int HrMn = 100 * (rtc.getHour()) + rtc.getMinute();
 
-  if (OpOffGrid) {         // Se é operação Off Grid,
-    digitalWrite(SD16,0);  // desativa os relés e conecta os paineis solares nos Controladores de Carga
+  if (OpOffGrid) {           // Se é operação Off Grid,
+    digitalWrite(SD16,LOW);  // desativa os relés e conecta os paineis solares nos Controladores de Carga
   }
 
   if (EAME0 < 2300) {  // Se a tensão das baterias é menor que 23,00 Volts, coloca em modo de economia.
@@ -1498,7 +1498,7 @@ void VerificaModoOp() {
     //
     if (EstadoRede == 0) {
 
-      LigaPaineisCC();                 // Liga os paineis fotovoltaicos nos Controladores de Carga.
+      digitalWrite(SD16,LOW);          // Liga os paineis fotovoltaicos nos Controladores de Carga.
       
       if (EAME0 > 2400) {              // Se a Tensão 24Vcc está maior que o mínimo,
         if (FalhaInversor2 == 0) {     // e se nao ha falha no Inversor2 (Direita),
