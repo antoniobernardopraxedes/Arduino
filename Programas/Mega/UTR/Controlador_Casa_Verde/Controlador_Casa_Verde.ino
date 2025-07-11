@@ -18,7 +18,7 @@
 // Definicao das constantes de conversao dos valores analogicos
 #define KMed00      5.3442   // Constante de Medida de Tensao CC: 0 a 30,11Vcc Barramento 24Vcc
 #define Offset00    0.0
-#define KMed01      10.420   // Constante de Medida da Tensão CC de saída das 3 fontes CC ligadas em série
+#define KMed01      6.487   // Constante de Medida da Tensão CC de saída das 3 fontes CC ligadas em série
 #define Offset01    0.0
 #define KMed02      9.137    // Constante da Medida de Temperatura do Driver do Inversor 1
 #define Offset02    0.0
@@ -249,6 +249,7 @@ double EAME0;         // Variavel com a Media estendida da Entrada Analogica 0 =
 double EAMET0;        // Variavel com o acumulador para calculo da media estendida da Tensao 24Vcc
 
 double VBat;          // EA00 - Tensao CC: Barramento Principal de 24 Volts
+double TensaoFontes;  // EA01 - Tensão das duas fontes entrada CA ligadas em série
 double TDInv2;        // EA02 - Temperatura: Driver do Inversor 2
 double ICirCC;        // EA03 - Corrente CC: Circuitos de Corrente Continua
 double VSInv1;        // EA04 - Tensao CA: Saida Inversor 1
@@ -1215,6 +1216,7 @@ void CarregaMedidas() {
     }
 
     VBat = EA[0];         // EA00 - Tensao CC: Barramento Principal de 24 Volts
+    TensaoFontes = EA[1]; // EA01 - Tensão das duas fontes CC ligadas em série
     ICirCC = EA[3];       // EA03 - Corrente CC: Circuitos de Corrente Continua
     VRede = EA[5];        // EA05 - Tensao CA: Rede
 
@@ -1303,13 +1305,21 @@ void VerificaTensaoRede() {
 //
 void VerificaFontes() {
 
-  if (EstadoRede == 1) {      // Se a tensão CA está normal,
-    EstadoFontes = 1;
-    digitalWrite(SD06,LOW);  // liga as fontes CC,
+  if (EstadoRede == 1) {         // Se a tensão CA está normal,
+    digitalWrite(SD06,LOW);      // liga as fontes CC
+    if (TensaoFontes > 4000) {   // Se a tensão das duas fontes em série é maior que 40 Volts,
+      EstadoFontes = 1;          // sinaliza fontes normais
+    }
+    else {
+      if (TensaoFontes < 3500) {  // Se a tensão das fontes é menor que 35 Volts,
+        EstadoFontes = 0;         // sinaliza fontes em falha.
+      }
+    }
+        
   }
   else {                      // Se há falta de tensão CA,
-    EstadoFontes = 0;
-    digitalWrite(SD06,HIGH);  // desliga as fontes CC,
+    EstadoFontes = 0;         // sinaliza fontes em falha,
+    digitalWrite(SD06,HIGH);  // e desliga as fontes.
   }
 }
 
@@ -1366,13 +1376,14 @@ void VerificaChaves() {
     
     //ModoControle1 = ModoControle;
   
-    // se a chave de Habilitacao de Cargas esta para baixo, desabilita a Carga3 na falta de CA
+    // se a chave de Hab. de Cargas esta embaixo, passa Carga2, Carga3 e Carga1 para o Inversor D
     if ((digitalRead(ChPrB) == 1) && (digitalRead(ChPrC) == 0)) {
       ModoOperacao = 1;
-      Carga1 = 0;
-      Carga2 = 0;
-      Carga3 = 0;
-      ModoControle = 0;
+      Carga1 = 1;
+      Carga2 = 1;
+      Carga3 = 1;
+      OpOffGrid = true;
+      ModoControle = 1;
       Carga4 = 0;
     }
 
@@ -1382,18 +1393,20 @@ void VerificaChaves() {
       Carga1 = 0;
       Carga2 = 0;
       Carga3 = 0;
+      OpOffGrid = false;
       ModoControle = 1;
       Carga4 = 0;
     }
 
-    // se a chave de Habilitacao de Cargas esta para cima, passa a Carga2, Carga3 e Carga1 para o Inversor 1
+    // se a chave de Hab. de Cargas esta para cima, passa Carga2, Carga3 e Carga1 para Inversor D e Carga4 para Inversor E
     if ((digitalRead(ChPrB) == 0) && (digitalRead(ChPrC) == 1)) {
       ModoOperacao = 1;
       Carga1 = 1;
       Carga2 = 1;
       Carga3 = 1;
+      OpOffGrid = true;
       ModoControle = 1;
-      Carga4 = 0;
+      Carga4 = 1;
     }
   }
   
@@ -1956,7 +1969,7 @@ void ControleLEDs() {
   LedAzul1(Carga1);
   LedAzul2(Carga2);
   LedAzul3(Carga3);
-  LedAzul4(ModoControle);
+  LedAzul4(Carga4);
    
 } // Fim da Rotina ControleLEDs()
 
